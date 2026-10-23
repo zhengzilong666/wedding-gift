@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>3D 记忆星轨 - 师茹靖 & 陈亚龙</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; color: #fff; }
+        #canvas-container { width: 100vw; height: 100vh; }
+
+        #ui-layer { position: absolute; top: 30px; left: 30px; z-index: 10; pointer-events: none; text-shadow: 0 0 15px rgba(255, 77, 109, 1); }
+        #ui-layer h1 { font-size: 1.5em; margin: 0; color: #ffb3c6; letter-spacing: 3px; }
+        #ui-layer p { font-size: 0.9em; color: #8b949e; margin-top: 8px; letter-spacing: 2px; }
+
+        #action-btn {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); z-index: 10;
+            background: rgba(22, 27, 34, 0.8); color: #ffb3c6; border: 2px solid #ffb3c6;
+            padding: 15px 40px; font-size: 1.2em; font-family: inherit; cursor: pointer;
+            letter-spacing: 3px; transition: all 0.4s; box-shadow: 0 0 20px rgba(255, 77, 109, 0.4);
+            opacity: 0; pointer-events: none; border-radius: 30px; backdrop-filter: blur(5px);
+        }
+        #action-btn:hover { background: rgba(255, 77, 109, 0.3); box-shadow: 0 0 50px rgba(255, 77, 109, 1); transform: translateX(-50%) scale(1.1); }
+
+        .scanlines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.3)); background-size: 100% 4px; z-index: 5; pointer-events: none; opacity: 0.6; }
+
+        #blessing-container {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.5);
+            text-align: center; z-index: 20; opacity: 0; pointer-events: none;
+            transition: all 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #blessing-container.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        #blessing-container h2 { font-size: 3.5em; margin: 0; color: #fff; letter-spacing: 5px; text-shadow: 0 0 10px #ff4d6d, 0 0 20px #ff4d6d, 0 0 40px #ff4d6d, 0 0 80px #ff4d6d; }
+        #blessing-container p { font-size: 1.8em; margin: 15px 0 5px 0; color: #ffb3c6; letter-spacing: 8px; }
+        #blessing-container span { font-size: 1em; color: #8b949e; letter-spacing: 3px; display: block; margin-top: 20px; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div class="scanlines"></div>
+    <div id="ui-layer">
+        <h1>> MEMORY_SYSTEM.BOOTING_</h1>
+        <p>CLICK SCREEN TO UNLOCK PHASE 2</p>
+    </div>
+
+    <button id="action-btn">启动最终引力坍缩 🎆</button>
+
+    <div id="blessing-container">
+        <h2>师茹靖 & 陈亚龙</h2>
+        <p>新婚快乐 · 百年好合</p>
+        <span>> ALL MEMORIES PRESERVED FOREVER_</span>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // === 1. 初始化环境 ===
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.0015);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 3000);
+        camera.position.set(0, 150, 900);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        let mouseX = 0, mouseY = 0, targetX = 0, targetY = 0;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX - window.innerWidth / 2) * 0.5;
+            mouseY = (e.clientY - window.innerHeight / 2) * 0.5;
+        });
+
+        // === 2. 核心引力：3D 粒子爱心 ===
+        const heartParticleCount = 6000;
+        const heartGeo = new THREE.BufferGeometry();
+        const heartPositions = new Float32Array(heartParticleCount * 3);
+        const heartColors = new Float32Array(heartParticleCount * 3);
+        const heartTargets = new Float32Array(heartParticleCount * 3);
+
+        const colorPink = new THREE.Color(0xff4d6d);
+        const colorPurple = new THREE.Color(0x8b5cf6);
+
+        for (let i = 0; i < heartParticleCount; i++) {
+            heartPositions[i * 3] = (Math.random() - 0.5) * 2000;
+            heartPositions[i * 3 + 1] = (Math.random() - 0.5) * 2000;
+            heartPositions[i * 3 + 2] = (Math.random() - 0.5) * 2000;
+            const mixedColor = colorPink.clone().lerp(colorPurple, Math.random());
+            heartColors[i * 3] = mixedColor.r; heartColors[i * 3 + 1] = mixedColor.g; heartColors[i * 3 + 2] = mixedColor.b;
+        }
+        heartGeo.setAttribute('position', new THREE.BufferAttribute(heartPositions, 3));
+        heartGeo.setAttribute('color', new THREE.BufferAttribute(heartColors, 3));
+        const heartMat = new THREE.PointsMaterial({ size: 3, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, opacity: 0 });
+        const heartSystem = new THREE.Points(heartGeo, heartMat);
+        scene.add(heartSystem);
+
+        function calcHeartTarget() {
+            for (let i = 0; i < heartParticleCount; i++) {
+                const t = Math.random() * Math.PI * 2;
+                const x = 16 * Math.pow(Math.sin(t), 3);
+                const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+                const z = (Math.random() - 0.5) * 20;
+                heartTargets[i * 3] = x * 12; heartTargets[i * 3 + 1] = y * 12; heartTargets[i * 3 + 2] = z;
+            }
+        }
+        calcHeartTarget();
+
+        // === 3. 多环系统 (唯美全息相框) ===
+        const textureLoader = new THREE.TextureLoader();
+        const rings = [new THREE.Group(), new THREE.Group(), new THREE.Group()];
+
+        rings[0].rotation.x = Math.PI / 6;
+        rings[1].rotation.x = -Math.PI / 3;
+        rings[1].rotation.z = Math.PI / 4;
+        rings[2].rotation.x = Math.PI / 2.5;
+        rings[2].rotation.y = Math.PI / 3;
+
+        rings.forEach((r, index) => {
+            if(index === 0) {
+                r.scale.set(1, 1, 1);
+            } else {
+                r.scale.set(0, 0, 0);
+            }
+            scene.add(r);
+        });
+
+        const photoData = [
+            { ring: 0, count: 4, radius: 220, size: 130 },
+            { ring: 1, count: 4, radius: 380, size: 150 },
+            { ring: 2, count: 5, radius: 550, size: 180 }
+        ];
+
+        let photoIndex = 1;
+        photoData.forEach(data => {
+            for (let i = 0; i < data.count; i++) {
+                // 创建一个容器来放相框
+                const photoContainer = new THREE.Group();
+
+                // 1. 外部光晕 (背后发光的盘)
+                const glowGeo = new THREE.CircleGeometry(data.size * 0.7, 32);
+                const glowMat = new THREE.MeshBasicMaterial({
+                    color: 0xff4d6d,
+                    transparent: true,
+                    opacity: 0.15,
+                    side: THREE.DoubleSide,
+                    blending: THREE.AdditiveBlending
+                });
+                const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+                glowMesh.position.z = -1; // 放在照片后面
+                photoContainer.add(glowMesh);
+
+                // 2. 照片本体 (用Canvas重绘成圆形相框)
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+
+                // 画一个深色底，防止图片没加载出来一片白
+                ctx.fillStyle = '#111';
+                ctx.beginPath();
+                ctx.arc(256, 256, 230, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 画渐变发光边框
+                ctx.lineWidth = 12;
+                const gradient = ctx.createLinearGradient(0, 0, 512, 512);
+                gradient.addColorStop(0, '#ff4d6d');
+                gradient.addColorStop(1, '#8b5cf6');
+                ctx.strokeStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(256, 256, 240, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // 将图片裁切成圆形
+                textureLoader.load(photoIndex + '.jpg', (texture) => {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(256, 256, 230, 0, Math.PI * 2);
+                    ctx.clip(); // 开启裁剪
+                    // 居中绘制图片
+                    ctx.drawImage(texture.image, 0, 0, texture.image.width, texture.image.height, 0, 0, 512, 512);
+                    ctx.restore();
+
+                    // 生成最终的纹理
+                    const finalTexture = new THREE.CanvasTexture(canvas);
+                    const mat = new THREE.MeshBasicMaterial({ map: finalTexture, transparent: true });
+                    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(data.size, data.size), mat);
+                    photoContainer.add(mesh);
+                });
+
+                // 3. 定位与朝向
+                const angle = (i / data.count) * Math.PI * 2;
+                photoContainer.position.set(Math.cos(angle) * data.radius, 0, Math.sin(angle) * data.radius);
+                photoContainer.lookAt(0, 0, 0);
+
+                // 添加到环
+                rings[data.ring].add(photoContainer);
+                photoIndex++;
+            }
+        });
+
+        // === 4. 状态机与交互 ===
+        let currentPhase = 1;
+        const btn = document.getElementById('action-btn');
+        const blessing = document.getElementById('blessing-container');
+
+        document.body.addEventListener('click', (e) => {
+            if(e.target.tagName === 'BUTTON') return;
+
+            if (currentPhase === 1) {
+                currentPhase = 2;
+                document.querySelector('#ui-layer h1').innerHTML = "> PHASE_2_UNLOCKED_";
+                document.querySelector('#ui-layer p').innerHTML = "MULTI-DIMENSIONAL ORBITS SYNCED";
+
+                setTimeout(() => { rings[1].scale.set(1, 1, 1); }, 300);
+                setTimeout(() => { rings[2].scale.set(1, 1, 1); }, 600);
+
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+            }
+        });
+
+        btn.addEventListener('click', () => {
+            if (currentPhase === 3) return;
+            currentPhase = 3;
+            btn.style.opacity = '0';
+
+            // 照片全部坍缩
+            rings.forEach(r => {
+                r.children.forEach(photoContainer => {
+                    photoContainer.userData.targetScale = 0;
+                    photoContainer.userData.velocity = photoContainer.position.clone().multiplyScalar(-0.05);
+                });
+            });
+
+            heartMat.opacity = 1;
+
+            document.querySelector('#ui-layer h1').innerHTML = "> GRAVITY_COLLAPSE_";
+            document.querySelector('#ui-layer p').innerHTML = "ABSORBING ALL MEMORIES...";
+
+            setTimeout(() => {
+                // 爱心爆炸
+                for (let i = 0; i < heartParticleCount; i++) {
+                    heartTargets[i * 3] = (Math.random() - 0.5) * 2500;
+                    heartTargets[i * 3 + 1] = (Math.random() - 0.5) * 2500;
+                    heartTargets[i * 3 + 2] = (Math.random() - 0.5) * 2500;
+                }
+                rings.forEach(r => r.visible = false);
+                blessing.classList.add('show');
+                document.querySelector('#ui-layer h1').innerHTML = "> SYSTEM_RESTORED_";
+            }, 3500);
+        });
+
+        // === 5. 渲染主循环 ===
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.01;
+
+            targetX = mouseX * 0.4;
+            targetY = mouseY * 0.4;
+            camera.position.x += (targetX - camera.position.x) * 0.05;
+            camera.position.y += (-targetY + 150 - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+
+            if (currentPhase === 1) {
+                rings[0].rotation.y += 0.005;
+            } else if (currentPhase === 2) {
+                rings[0].rotation.y += 0.01;
+                rings[1].rotation.y -= 0.007;
+                rings[2].rotation.y += 0.004;
+            } else if (currentPhase === 3) {
+                rings.forEach(r => {
+                    r.children.forEach(photoContainer => {
+                        if(photoContainer.position.length() > 10) {
+                            photoContainer.position.add(photoContainer.userData.velocity);
+                            photoContainer.scale.multiplyScalar(0.95);
+                        } else {
+                            photoContainer.visible = false;
+                        }
+                    });
+                });
+            }
+
+            if (heartMat.opacity > 0) {
+                heartSystem.scale.setScalar(1 + Math.sin(time * 5) * 0.05);
+            }
+            const positionsArray = heartSystem.geometry.attributes.position.array;
+            for (let i = 0; i < heartParticleCount * 3; i++) {
+                positionsArray[i] += (heartTargets[i] - positionsArray[i]) * 0.06;
+            }
+            heartSystem.geometry.attributes.position.needsUpdate = true;
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
